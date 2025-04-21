@@ -15,9 +15,17 @@ START
 ├─ Launch Chrome Browser
 │   ├─ Configure Chrome options
 │   │   ├─ Stealth mode (if enabled)
+│   │   │   └─ Use undetected_chromedriver to bypass anti-bot detection
 │   │   ├─ Background mode (if enabled)
+│   │   │   └─ Run browser in headless mode
 │   │   └─ User profile (if available)
+│   │       └─ Load saved cookies and sessions
 │   └─ Create WebDriver instance
+│
+├─ AI Services Initialization (if use_AI = True)
+│   ├─ Initialize OpenAI API client
+│   ├─ Load AI prompts and templates
+│   └─ Prepare AI context for job applications
 │
 ├─ LinkedIn Login Process
 │   ├─ Navigate to LinkedIn login page
@@ -42,6 +50,14 @@ START
 │   ├─ For each search term in config
 │   │   ├─ Navigate to LinkedIn jobs search
 │   │   ├─ Apply filters (location, date posted, etc.)
+│   │   │   ├─ Set search location
+│   │   │   ├─ Set date posted filter
+│   │   │   ├─ Set experience level filter
+│   │   │   ├─ Set job type filter (full-time, part-time, etc.)
+│   │   │   ├─ Set on-site/remote filter
+│   │   │   ├─ Set Easy Apply filter (if easy_apply_only = True)
+│   │   │   ├─ Set salary filter
+│   │   │   └─ Apply additional filters (industry, company, etc.)
 │   │   └─ Process job listings
 │   │
 │   └─ Process job listings
@@ -50,7 +66,18 @@ START
 │       │   ├─ Check blacklisted companies
 │       │   ├─ Click on job to view details
 │       │   ├─ Extract job information
+│       │   │   ├─ Extract job title, company, location
+│       │   │   ├─ Extract job description
+│       │   │   ├─ Extract required experience
+│       │   │   └─ Extract HR information (if available)
+│       │   ├─ AI Analysis (if use_AI = True)
+│       │   │   ├─ Extract skills from job description
+│       │   │   ├─ Analyze job fit based on user profile
+│       │   │   └─ Prepare custom responses for application
 │       │   ├─ Check job requirements
+│       │   │   ├─ Check experience requirements
+│       │   │   ├─ Check for blacklisted keywords
+│       │   │   └─ Check for security clearance requirements
 │       │   └─ Decide to apply or skip
 │       └─ Navigate to next page if available
 │
@@ -58,18 +85,40 @@ START
 │   ├─ Check application type
 │   │   ├─ Easy Apply
 │   │   │   ├─ Click Easy Apply button
+│   │   │   ├─ Resume Handling
+│   │   │   │   ├─ Use default resume (if useNewResume = False)
+│   │   │   │   ├─ Generate custom resume (if use_AI = True)
+│   │   │   │   │   ├─ Extract key requirements from job description
+│   │   │   │   │   ├─ Generate tailored resume content
+│   │   │   │   │   └─ Create and upload custom resume
+│   │   │   │   └─ Upload resume file
 │   │   │   ├─ Answer application questions
 │   │   │   │   ├─ Fill text fields
+│   │   │   │   │   ├─ Use predefined answers from config
+│   │   │   │   │   └─ Generate AI answers (if use_AI = True)
 │   │   │   │   ├─ Select dropdown options
+│   │   │   │   │   ├─ Use predefined selections
+│   │   │   │   │   └─ Generate AI selections (if use_AI = True)
 │   │   │   │   ├─ Check radio buttons
-│   │   │   │   └─ Upload resume (if needed)
+│   │   │   │   │   ├─ Use predefined selections
+│   │   │   │   │   └─ Generate AI selections (if use_AI = True)
+│   │   │   │   └─ Handle textarea questions
+│   │   │   │       ├─ Use predefined answers
+│   │   │   │       └─ Generate AI answers (if use_AI = True)
 │   │   │   ├─ Navigate through application steps
 │   │   │   │   ├─ Click Next/Continue buttons
 │   │   │   │   ├─ Handle stuck questions
-│   │   │   │   └─ Pause for manual intervention (if configured)
+│   │   │   │   │   ├─ Try alternative answers
+│   │   │   │   │   ├─ Use AI to generate answers (if use_AI = True)
+│   │   │   │   │   └─ Pause for manual intervention (if pause_at_failed_question = True)
+│   │   │   │   └─ Handle application flow
 │   │   │   ├─ Review application
+│   │   │   │   ├─ Pause for manual review (if pause_before_submit = True)
+│   │   │   │   └─ Follow company (if follow_companies = True)
 │   │   │   ├─ Submit application
 │   │   │   └─ Confirm submission
+│   │   │       ├─ Check for success indicators
+│   │   │       └─ Log detailed application status
 │   │   │
 │   │   └─ External Apply
 │   │       ├─ Click Apply button
@@ -79,7 +128,21 @@ START
 │   │
 │   └─ Record application result
 │       ├─ SUCCESS → Log in applied jobs CSV
+│       │   ├─ Record job details
+│       │   ├─ Record application answers
+│       │   └─ Record application timestamp
 │       └─ FAILURE → Log in failed jobs CSV
+│           ├─ Record job details
+│           ├─ Record error information
+│           └─ Save screenshot for debugging
+│
+├─ Connect with HR (if connect_hr = True)
+│   ├─ Extract HR information
+│   ├─ Navigate to HR profile
+│   ├─ Send connection request
+│   │   ├─ Generate personalized message (if use_AI = True)
+│   │   └─ Send connection with custom note
+│   └─ Return to job search
 │
 ├─ Error Handling
 │   ├─ Screenshot errors
@@ -95,7 +158,7 @@ START
 
 ## System Architecture
 
-```
+```text
 +----------------------------------+
 |        Configuration Layer       |
 +----------------------------------+
@@ -104,6 +167,7 @@ START
 | - search.py (Search parameters)  |
 | - questions.py (Answer templates)|
 | - personals.py (User details)    |
+| - AI settings (if use_AI = True) |
 +----------------------------------+
               |
               v
@@ -123,17 +187,22 @@ START
 | - Selenium      |    | - Login        |    | - Logging      |
 | - WebDriver     |<-->| - Job search   |<-->| - Screenshots  |
 | - ChromeOptions |    | - Applications |    | - Error logs   |
+| - Stealth mode  |    | - HR connect   |    | - Analytics    |
 +----------------+    +----------------+    +----------------+
-              ^                ^
-              |                |
-              v                v
-+----------------+    +----------------+
-| Helper Modules |    |  AI Services   |
-+----------------+    +----------------+
-| - helpers.py   |    | - OpenAI API   |
-| - clickers.py  |    | - Resume gen.  |
-| - validator.py |    | - Q&A handling |
-+----------------+    +----------------+
+       ^  ^                ^  ^                    ^
+       |  |                |  |                    |
+       |  +----------------+  +--------------------+
+       |                   |                       |
+       v                   v                       v
++----------------+    +----------------+    +----------------+
+| Helper Modules |    |  AI Services   |    | Optional Modes |
++----------------+    | (if use_AI=True)|    +----------------+
+| - helpers.py   |    +----------------+    | - Stealth mode  |
+| - clickers.py  |    | - OpenAI API   |    | - Background    |
+| - validator.py |    | - Resume gen.  |    | - Connect HR    |
+| - utils.py     |    | - Q&A handling |    | - Follow comp.  |
+| - screenshot.py|    | - Custom msgs  |    | - Custom resume |
++----------------+    +----------------+    +----------------+
 ```
 
 ## Component Descriptions
@@ -169,27 +238,76 @@ Contains all configuration files that control the application's behavior:
 - Error logs for troubleshooting
 
 ### Helper Modules
+
 - **helpers.py**: Utility functions used throughout the application
 - **clickers.py**: Functions for interacting with web elements
 - **validator.py**: Validates configuration settings
+- **utils.py**: General utility functions
+- **screenshot.py**: Screenshot capture for debugging
 
-### AI Services
+### AI Services (when use_AI = True)
+
 - Integration with OpenAI API for intelligent responses
 - Resume generation based on job descriptions
 - Automated question answering for applications
+- Custom cover letter generation
+- Personalized HR connection messages
+- Job fit analysis and skill matching
 
 ## Key Processes
 
 ### Login Process
+
 The application first attempts to log in automatically using credentials from secrets.py. If that fails, it waits for manual login, detecting and handling verification challenges.
 
+Key login features:
+
+- Automatic login using stored credentials
+- Unchecks "Remember me" checkbox for security
+- Detects verification challenges and security checks
+- Waits for manual intervention when needed
+- Handles CAPTCHA and human verification screens
+- Maintains session for the entire application process
+
 ### Job Search Process
+
 For each search term in the configuration, the application searches LinkedIn jobs, applies filters, and processes each job listing to determine if it should apply.
 
+When AI is enabled (use_AI = True):
+
+- Extracts key skills and requirements from job descriptions
+- Analyzes job fit based on user profile and preferences
+- Prioritizes jobs with higher match scores
+- Identifies keywords for resume customization
+- Prepares tailored application strategies
+
 ### Application Process
+
 The application handles two types of applications:
+
 1. **Easy Apply**: Directly applies through LinkedIn's Easy Apply system
+   - Automatically fills in application forms
+   - Uploads resumes and cover letters
+   - Answers screening questions
+   - When AI is enabled:
+     - Generates tailored responses to questions
+     - Creates custom resumes based on job requirements
+     - Analyzes job fit and suggests optimal answers
+
 2. **External Apply**: Captures external application links for manual application
+   - Saves links for later manual application
+   - Records job details for reference
 
 ### Error Handling
+
 Comprehensive error handling includes screenshots, detailed logging, and recovery mechanisms to ensure the application can continue even after encountering issues.
+
+### Optional Modes
+
+- **Stealth Mode**: Uses undetected_chromedriver to bypass LinkedIn's anti-bot detection
+- **Background Mode**: Runs the browser in headless mode without visible UI
+- **Connect with HR**: Automatically sends connection requests to HR personnel
+- **Follow Companies**: Follows companies during the application process
+- **AI-Enabled Mode**: Uses AI for resume generation, question answering, and more
+- **Custom Resume**: Generates tailored resumes for each job application
+- **Manual Intervention**: Pauses at specific points for user review and input
