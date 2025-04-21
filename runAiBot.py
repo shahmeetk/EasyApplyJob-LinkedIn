@@ -18,7 +18,7 @@ from selenium.common.exceptions import NoSuchElementException, ElementClickInter
 from config.personals import *
 from config.questions import *
 from config.search import *
-from config.secrets import use_AI, username, password
+from config.secrets import *
 from config.settings import *  # This imports remember_me and other settings
 
 from modules.open_chrome import *
@@ -118,16 +118,34 @@ def login_LN() -> None:
 
         # Handle the "Remember me" checkbox based on settings
         try:
-            remember_me_checkbox = driver.find_element(By.ID, "remember-me-checkbox")
-            # Check if the current state matches the desired state
-            if remember_me_checkbox.is_selected() != remember_me:
-                remember_me_checkbox.click()
-                if remember_me:
-                    print_lg("Checked 'Remember me' checkbox")
-                else:
-                    print_lg("Unchecked 'Remember me' checkbox")
+            # Wait for the checkbox to be present and visible
+            remember_me_checkbox = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.ID, "remember-me-checkbox"))
+            )
+
+            # Check the current state of the checkbox
+            is_checked = remember_me_checkbox.is_selected()
+            print_lg(f"Remember me checkbox is currently {'checked' if is_checked else 'unchecked'}")
+
+            # If the current state doesn't match the desired state, click it
+            if is_checked != remember_me:
+                # Use JavaScript to click the checkbox for more reliability
+                driver.execute_script("arguments[0].click();", remember_me_checkbox)
+                print_lg(f"{'Checked' if remember_me else 'Unchecked'} 'Remember me' checkbox")
+
+                # Verify the change took effect
+                is_checked_after = remember_me_checkbox.is_selected()
+                if is_checked_after != remember_me:
+                    print_lg("Warning: Failed to change 'Remember me' checkbox state. Trying alternative method...")
+                    # Try alternative method - find the label and click it
+                    try:
+                        remember_me_label = driver.find_element(By.XPATH, "//label[@for='remember-me-checkbox']")
+                        driver.execute_script("arguments[0].click();", remember_me_label)
+                        print_lg(f"Used alternative method to {'check' if remember_me else 'uncheck'} 'Remember me' checkbox")
+                    except Exception:
+                        print_lg("Failed to find 'Remember me' label")
         except Exception as e:
-            print_lg("Couldn't find or modify 'Remember me' checkbox")
+            print_lg(f"Couldn't find or modify 'Remember me' checkbox: {str(e)}")
 
         # Find the login submit button and click it
         driver.find_element(By.XPATH, '//button[@type="submit" and contains(text(), "Sign in")]').click()
@@ -1138,11 +1156,17 @@ def main() -> None:
         #     except Exception as e:
         #         print_lg("Opening OpenAI chatGPT tab failed!")
         # Initialize AI if enabled
+        global use_AI
         if use_AI:
-            print_lg(f"Initializing AI with provider: {ai_provider}")
-            ai_initialized = initialize_ai()
-            if not ai_initialized:
-                print_lg("Failed to initialize AI. Continuing without AI functionality.")
+            try:
+                print_lg(f"Initializing AI with provider: {ai_provider}")
+                ai_initialized = initialize_ai()
+                if not ai_initialized:
+                    print_lg("Failed to initialize AI. Continuing without AI functionality.")
+                    use_AI = False
+            except Exception as e:
+                print_lg(f"Error initializing AI: {str(e)}")
+                print_lg("Continuing without AI functionality.")
                 use_AI = False
 
         # Start applying to jobs

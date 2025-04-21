@@ -45,9 +45,16 @@ def ollama_is_running() -> bool:
     Returns True if Ollama is running, False otherwise.
     """
     try:
-        response = requests.get(f"{ollama_api_url}/api/tags")
-        return response.status_code == 200
-    except Exception:
+        # Get Ollama API URL from globals
+        api_url = globals().get('ollama_api_url', 'http://localhost:11434')
+        print_lg(f"Checking if Ollama is running at {api_url}...")
+
+        response = requests.get(f"{api_url}/api/tags")
+        is_running = response.status_code == 200
+        print_lg(f"Ollama running status: {is_running}")
+        return is_running
+    except Exception as e:
+        print_lg(f"Error checking if Ollama is running: {str(e)}")
         return False
 
 # Function to get list of models available in Ollama
@@ -57,9 +64,12 @@ def ollama_get_models_list() -> List[Dict[str, Any]]:
     Returns a list of model information dictionaries.
     """
     try:
-        print_lg("Getting Ollama models list...")
-        response = requests.get(f"{ollama_api_url}/api/tags")
-        
+        # Get Ollama API URL from globals
+        api_url = globals().get('ollama_api_url', 'http://localhost:11434')
+        print_lg(f"Getting Ollama models list from {api_url}...")
+
+        response = requests.get(f"{api_url}/api/tags")
+
         if response.status_code == 200:
             models = response.json().get("models", [])
             print_lg("Available Ollama models:")
@@ -84,70 +94,75 @@ def ollama_model_exists(model_name: str) -> bool:
         models = ollama_get_models_list()
         if any(isinstance(model, dict) and model.get("error") for model in models):
             return False
-            
+
         return any(model.get("name") == model_name for model in models)
     except Exception:
         return False
 
 # Function to generate completions using Ollama
 def ollama_completion(
-    messages: List[Dict[str, str]], 
-    model: str = ollama_model,
+    messages: List[Dict[str, str]],
+    model: str = None,
     temperature: float = 0.7,
-    stream: bool = stream_output,
+    stream: bool = None,
     response_format: Dict = None
 ) -> Union[str, Dict]:
     """
     Function to generate completions using Ollama.
-    
+
     Parameters:
     - messages: List of message dictionaries with 'role' and 'content' keys
     - model: Ollama model name to use
     - temperature: Temperature for generation (0.0 to 1.0)
     - stream: Whether to stream the response
     - response_format: Optional format specification for JSON responses
-    
+
     Returns:
     - String response or JSON object if response_format is specified
     """
     try:
-        print_lg(f"Generating completion using Ollama model: {model}")
-        
+        # Get configuration from globals
+        api_url = globals().get('ollama_api_url', 'http://localhost:11434')
+        model_name = model or globals().get('ollama_model', 'gemma3:4b')
+        should_stream = stream if stream is not None else globals().get('stream_output', False)
+
+        print_lg(f"Generating completion using Ollama model: {model_name} at {api_url}")
+
         # Convert OpenAI-style messages to Ollama format
         prompt = ""
         for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")
-            
+
             if role == "system":
                 prompt = f"{content}\n\n{prompt}"
             elif role == "user":
                 prompt += f"User: {content}\n"
             elif role == "assistant":
                 prompt += f"Assistant: {content}\n"
-        
+
         # Add final prompt marker
         prompt += "Assistant: "
-        
+
         # Prepare the request payload
         payload = {
-            "model": model,
+            "model": model_name,
             "prompt": prompt,
-            "stream": stream,
+            "stream": should_stream,
             "options": {
                 "temperature": temperature
             }
         }
-        
+
         # Make the API request
-        if stream:
+        if should_stream:
             print_lg("--STREAMING STARTED")
             response = requests.post(
-                f"{ollama_api_url}/api/generate", 
+                f"{api_url}/api/generate",
                 json=payload,
                 stream=True
             )
-            
+
             result = ""
             for line in response.iter_lines():
                 if line:
@@ -155,32 +170,32 @@ def ollama_completion(
                     chunk_text = chunk.get("response", "")
                     result += chunk_text
                     print_lg(chunk_text, end="", flush=True)
-                    
+
                     # Check if we've reached the end of the stream
                     if chunk.get("done", False):
                         break
-                        
+
             print_lg("\n--STREAMING COMPLETE")
         else:
             response = requests.post(
-                f"{ollama_api_url}/api/generate", 
+                f"{api_url}/api/generate",
                 json=payload
             )
-            
+
             if response.status_code == 200:
                 result = response.json().get("response", "")
             else:
                 error_msg = f"Ollama API error: {response.status_code} - {response.text}"
                 print_lg(error_msg)
                 raise Exception(error_msg)
-        
+
         # Handle JSON response format if specified
         if response_format and response_format.get("type") == "json_schema":
             try:
                 # Try to extract JSON from the response
                 json_start = result.find("{")
                 json_end = result.rfind("}") + 1
-                
+
                 if json_start >= 0 and json_end > json_start:
                     json_str = result[json_start:json_end]
                     result = json.loads(json_str)
@@ -190,36 +205,43 @@ def ollama_completion(
             except json.JSONDecodeError:
                 # If JSON parsing fails, try to convert the text to JSON
                 result = convert_to_json(result)
-        
+
         print_lg("\nOllama Answer to Question:\n")
         print_lg(result, pretty=bool(response_format))
         return result
-        
+
     except Exception as e:
         error_msg = f"Error occurred while generating Ollama completion: {str(e)}"
         ollama_error_alert(error_msg, e)
         return {"error": error_msg}
 
 # Function to extract skills from job description using Ollama
-def ollama_extract_skills(job_description: str, stream: bool = stream_output) -> Dict:
+def ollama_extract_skills(job_description: str, stream: bool = None) -> Dict:
     """
     Function to extract skills from job description using Ollama.
-    
+
     Parameters:
     - job_description: The job description text
-    - stream: Whether to stream the response
-    
+    - stream: Whether to stream the response (defaults to config setting)
+
     Returns:
     - Dictionary containing extracted skills
     """
     print_lg("-- EXTRACTING SKILLS FROM JOB DESCRIPTION USING OLLAMA")
     try:
+        # Format the prompt with the job description
         prompt = extract_skills_prompt.format(job_description)
-        
+
+        # Create the message for Ollama
         messages = [{"role": "user", "content": prompt}]
+
+        # Get the model name from globals
+        model_name = globals().get('ollama_model', 'gemma3:4b')
+
+        # Call Ollama completion
         return ollama_completion(
-            messages, 
-            model=ollama_model,
+            messages=messages,
+            model=model_name,
             stream=stream,
             response_format=extract_skills_response_format
         )
@@ -230,17 +252,17 @@ def ollama_extract_skills(job_description: str, stream: bool = stream_output) ->
 
 # Function to answer questions using Ollama
 def ollama_answer_question(
-    question: str, 
-    options: List[str] = None, 
+    question: str,
+    options: List[str] = None,
     question_type: Literal['text', 'textarea', 'single_select', 'multiple_select'] = 'text',
-    job_description: str = None, 
-    about_company: str = None, 
+    job_description: str = None,
+    about_company: str = None,
     user_information_all: str = None,
-    stream: bool = stream_output
+    stream: bool = None
 ) -> str:
     """
     Function to generate Ollama-based answers for questions in a form.
-    
+
     Parameters:
     - question: The question being answered
     - options: List of options (for single_select or multiple_select questions)
@@ -248,34 +270,40 @@ def ollama_answer_question(
     - job_description: Optional job description for context
     - about_company: Optional company details for context
     - user_information_all: Information about the user
-    - stream: Whether to stream the response
-    
+    - stream: Whether to stream the response (defaults to config setting)
+
     Returns:
     - The Ollama-generated answer
     """
-    print_lg("-- ANSWERING QUESTION USING OLLAMA")
+    print_lg(f"-- ANSWERING QUESTION USING OLLAMA: {question}")
     try:
+        # Format the prompt with user information and question
         prompt = ai_answer_prompt.format(user_information_all or "N/A", question)
-        
+
         # Append optional details if provided
         if job_description and job_description != "Unknown":
             prompt += f"\nJob Description:\n{job_description}"
         if about_company and about_company != "Unknown":
             prompt += f"\nAbout the Company:\n{about_company}"
-            
+
         # Add options if provided
         if options and (question_type == 'single_select' or question_type == 'multiple_select'):
             prompt += f"\nOptions: {', '.join(options)}"
-            
+
+        # Create the message for Ollama
         messages = [{"role": "user", "content": prompt}]
         print_lg("Prompt we are passing to Ollama: ", prompt)
-        
+
+        # Get the model name from globals
+        model_name = globals().get('ollama_model', 'gemma3:4b')
+
+        # Call Ollama completion
         response = ollama_completion(
-            messages,
-            model=ollama_model,
+            messages=messages,
+            model=model_name,
             stream=stream
         )
-        
+
         return response
     except Exception as e:
         error_msg = f"Error occurred while answering question using Ollama: {str(e)}"
