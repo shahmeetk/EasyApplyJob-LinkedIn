@@ -19,13 +19,15 @@ from config.personals import *
 from config.questions import *
 from config.search import *
 from config.secrets import use_AI, username, password
-from config.settings import *
+from config.settings import *  # This imports remember_me and other settings
 
 from modules.open_chrome import *
 from modules.helpers import *
 from modules.clickers_and_finders import *
 from modules.validator import validate_config
-from modules.ai.openaiConnections import *
+
+# Import the unified AI interface
+from modules.ai.aiInterface import *
 
 from typing import Literal
 
@@ -114,14 +116,18 @@ def login_LN() -> None:
             print_lg("Couldn't find password field.")
             # print_lg(e)
 
-        # Uncheck the "Remember me" checkbox if it's checked
+        # Handle the "Remember me" checkbox based on settings
         try:
-            remember_me = driver.find_element(By.ID, "remember-me-checkbox")
-            if remember_me.is_selected():
-                remember_me.click()
-                print_lg("Unchecked 'Remember me' checkbox")
+            remember_me_checkbox = driver.find_element(By.ID, "remember-me-checkbox")
+            # Check if the current state matches the desired state
+            if remember_me_checkbox.is_selected() != remember_me:
+                remember_me_checkbox.click()
+                if remember_me:
+                    print_lg("Checked 'Remember me' checkbox")
+                else:
+                    print_lg("Unchecked 'Remember me' checkbox")
         except Exception as e:
-            print_lg("Couldn't find or uncheck 'Remember me' checkbox")
+            print_lg("Couldn't find or modify 'Remember me' checkbox")
 
         # Find the login submit button and click it
         driver.find_element(By.XPATH, '//button[@type="submit" and contains(text(), "Sign in")]').click()
@@ -591,12 +597,19 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                 else: answer = answer_common_questions(label,answer)
                 ##> ------ Dheeraj Deshwal : dheeraj9811 Email:dheeraj20194@iiitd.ac.in/dheerajdeshwal9811@gmail.com - Feature ------
                 if answer == "":
-                    if use_AI and aiClient:
+                    if use_AI:
                         try:
-                             answer = ai_answer_question(aiClient, label_org, question_type="text" ,job_description=job_description, user_information_all = user_information_all)
-                             print_lg(f'AI Answered recived for question"{label_org}" \nhere is answer : "{answer}"')
+                            answer = answer_question(
+                                question=label_org,
+                                question_type="text",
+                                job_description=job_description,
+                                user_information_all=user_information_all
+                            )
+                            print_lg(f'AI answer received for question "{label_org}"\nAnswer: "{answer}"')
                         except Exception as e:
-                            print_lg("Failed to get AI answer!", e)
+                            print_lg(f"Failed to get AI answer: {e}")
+                            randomly_answered_questions.add((label_org, "text"))
+                            answer = years_of_experience
                     else:
                         randomly_answered_questions.add((label_org, "text"))
                         answer = years_of_experience
@@ -623,12 +636,18 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                 elif 'cover' in label: answer = cover_letter
                 if answer == "":
                 ##> ------ Dheeraj Deshwal : dheeraj9811 Email:dheeraj20194@iiitd.ac.in/dheerajdeshwal9811@gmail.com - Feature ------
-                    if use_AI and aiClient:
+                    if use_AI:
                         try:
-                             answer = ai_answer_question(aiClient, label_org, question_type="textarea" ,job_description=job_description, user_information_all = user_information_all)
-                             print_lg(f'AI Answered recived for question"{label_org}" \nhere is answer : "{answer}"')
+                            answer = answer_question(
+                                question=label_org,
+                                question_type="textarea",
+                                job_description=job_description,
+                                user_information_all=user_information_all
+                            )
+                            print_lg(f'AI answer received for question "{label_org}"\nAnswer: "{answer}"')
                         except Exception as e:
-                            print_lg("Failed to get AI answer!", e)
+                            print_lg(f"Failed to get AI answer: {e}")
+                            randomly_answered_questions.add((label_org, "textarea"))
                     else:
                         randomly_answered_questions.add((label_org, "textarea"))
             text_area.clear()
@@ -925,8 +944,15 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                         continue
 
 
+                    # Extract skills using AI if enabled
                     if use_AI and description != "Unknown":
-                        skills = ai_extract_skills(aiClient, description)
+                        try:
+                            skills = extract_skills(description)
+                            print_lg("Skills extracted using AI:")
+                            print_lg(skills, pretty=True)
+                        except Exception as e:
+                            print_lg(f"Failed to extract skills using AI: {e}")
+                            skills = "Failed to extract skills using AI"
 
                     uploaded = False
                     # Case 1: Easy Apply Button
@@ -1081,7 +1107,7 @@ linkedIn_tab = False
 def main() -> None:
     total_runs = 1
     try:
-        global linkedIn_tab, tabs_count, useNewResume, aiClient
+        global linkedIn_tab, tabs_count, useNewResume
         alert_title = "Error Occurred. Closing Browser!"
         validate_config()
 
@@ -1111,8 +1137,13 @@ def main() -> None:
         #         chatGPT_tab = driver.current_window_handle
         #     except Exception as e:
         #         print_lg("Opening OpenAI chatGPT tab failed!")
+        # Initialize AI if enabled
         if use_AI:
-            aiClient = ai_create_openai_client()
+            print_lg(f"Initializing AI with provider: {ai_provider}")
+            ai_initialized = initialize_ai()
+            if not ai_initialized:
+                print_lg("Failed to initialize AI. Continuing without AI functionality.")
+                use_AI = False
 
         # Start applying to jobs
         driver.switch_to.window(linkedIn_tab)
@@ -1176,9 +1207,15 @@ def main() -> None:
             except Exception as alert_error:
                 print_lg(f"Error showing alert: {alert_error}")
             print_lg("\n"+msg)
-        ai_close_openai_client(aiClient)
-        try: driver.quit()
-        except Exception as e: critical_error_log("When quitting...", e)
+        # Clean up AI resources if initialized
+        if use_AI:
+            cleanup_ai()
+
+        # Close the browser
+        try:
+            driver.quit()
+        except Exception as e:
+            critical_error_log("When quitting...", e)
 
 
 if __name__ == "__main__":
