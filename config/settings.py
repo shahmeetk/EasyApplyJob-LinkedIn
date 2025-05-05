@@ -14,6 +14,12 @@ follow_companies = False            # True or False, Note: True or False are cas
 # Remember me on LinkedIn login
 remember_me = False                # True or False, Note: True or False are case-sensitive
 
+# Reuse existing browser session if available
+reuse_browser_session = True      # True or False, Note: True or False are case-sensitive
+
+# Logout and login again after a certain number of applications
+logout_after_applications = 15    # Number of applications after which to logout and login again (0 to disable)
+
 ## Upcoming features (In Development)
 # # Send connection requests to HR's
 # connect_hr = True                  # True or False, Note: True or False are case-sensitive
@@ -69,7 +75,7 @@ smooth_scroll = False               # True or False, Note: True or False are cas
 keep_screen_awake = True            # True or False, Note: True or False are case-sensitive (Note: Will temporarily deactivate when any application dialog boxes are present (Eg: Pause before submit, Help needed for a question..))
 
 # Run in undetected mode to bypass anti-bot protections (Preview Feature, UNSTABLE. Recommended to leave it as False)
-stealth_mode = True                 # True or False, Note: True or False are case-sensitive
+stealth_mode = False                 # True or False, Note: True or False are case-sensitive
 
 # Do you want to get alerts on errors related to AI API connection?
 showAiErrorAlerts = True            # True or False, Note: True or False are case-sensitive

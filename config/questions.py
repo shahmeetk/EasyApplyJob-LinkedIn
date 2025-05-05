@@ -137,7 +137,7 @@ recent_employer = "Network International LLC" # "", "Lala Company", "Google", "S
 confidence_level = "8"             # Any number between "1" to "10" including 1 and 10, put it in quotes ""
 ##
 
-run_in_background = True
+run_in_background = False
 
 # >>>>>>>>>>> RELATED SETTINGS <<<<<<<<<<<
 

@@ -170,6 +170,53 @@ def login_LN() -> None:
         wait_for_manual_login(is_logged_in_LN)
 #>
 
+def logout_LN() -> bool:
+    '''
+    Function to logout from LinkedIn
+    * Returns: `True` if logout was successful or `False` if not
+    '''
+    try:
+        print_lg("Attempting to logout from LinkedIn...")
+
+        # Click on the profile menu button
+        try:
+            # First try to find the profile button by aria-label
+            profile_button = driver.find_element(By.XPATH, "//button[@aria-label='Open profile menu']")
+            profile_button.click()
+        except NoSuchElementException:
+            # If that fails, try to find it by class
+            try:
+                profile_button = driver.find_element(By.XPATH, "//button[contains(@class, 'global-nav__primary-link')]")
+                profile_button.click()
+            except NoSuchElementException:
+                # If that also fails, try to find it by the image
+                profile_button = driver.find_element(By.XPATH, "//button[contains(@class, 'global-nav__avatar')]")
+                profile_button.click()
+
+        buffer(1)
+
+        # Click on the Sign Out button
+        try:
+            # Wait for the dropdown menu to appear and click Sign Out
+            sign_out_button = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH, "//a[contains(@href, '/logout') or contains(text(), 'Sign Out')]"))
+            )
+            sign_out_button.click()
+
+            # Wait for logout to complete
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, "//button[contains(@class, 'sign-in-form__submit-btn') or contains(text(), 'Sign in')]"))
+            )
+            print_lg("Successfully logged out from LinkedIn")
+            return True
+        except Exception as e:
+            print_lg(f"Failed to click Sign Out button: {str(e)}")
+            return False
+
+    except Exception as e:
+        print_lg(f"Failed to logout from LinkedIn: {str(e)}")
+        return False
+
 
 
 def get_applied_job_ids() -> set:
@@ -848,6 +895,9 @@ def apply_to_jobs(search_terms: list[str]) -> None:
     rejected_jobs = set()
     blacklisted_companies = set()
     global current_city, failed_count, skip_count, easy_applied_count, external_jobs_count, tabs_count, pause_before_submit, pause_at_failed_question, useNewResume
+
+    # Track applications in current session for logout/login refresh
+    session_application_count = 0
     current_city = current_city.strip()
 
     if randomize_search_order:  shuffle(search_terms)
@@ -1078,7 +1128,25 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                         external_jobs_count += 1
 
                     current_count += 1
+                    session_application_count += 1
                     applied_jobs.add(job_id)
+
+                    # Check if we need to logout and login again
+                    if logout_after_applications > 0 and session_application_count >= logout_after_applications:
+                        print_lg(f"\n*** REACHED {session_application_count} APPLICATIONS IN THIS SESSION ***")
+                        print_lg("Logging out and logging back in to refresh the session...")
+
+                        # Logout from LinkedIn
+                        if logout_LN():
+                            # Wait a bit before logging back in
+                            buffer(3)
+                            # Login again
+                            login_LN()
+                            # Reset the session application count
+                            session_application_count = 0
+                            print_lg("Successfully logged back in. Continuing with job applications...")
+                        else:
+                            print_lg("Failed to logout. Continuing with the current session...")
 
 
 
@@ -1139,8 +1207,25 @@ def main() -> None:
 
         # Login to LinkedIn
         tabs_count = len(driver.window_handles)
-        driver.get("https://www.linkedin.com/login")
-        if not is_logged_in_LN(): login_LN()
+
+        # Check if we should try to reuse an existing session
+        if reuse_browser_session:
+            print_lg("Attempting to reuse existing LinkedIn session...")
+            # First try to go to LinkedIn feed to see if we're already logged in
+            driver.get("https://www.linkedin.com/feed/")
+            buffer(2)
+
+            # Check if we're logged in
+            if is_logged_in_LN():
+                print_lg("Successfully reused existing LinkedIn session!")
+            else:
+                print_lg("No existing session found or session expired. Proceeding with normal login...")
+                driver.get("https://www.linkedin.com/login")
+                login_LN()
+        else:
+            # Standard login process
+            driver.get("https://www.linkedin.com/login")
+            if not is_logged_in_LN(): login_LN()
 
         linkedIn_tab = driver.current_window_handle
 
